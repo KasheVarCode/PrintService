@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Melting Calculator (Gold, Silver, Platinum)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #ccc;
+      margin: 0; padding: 0;
+    }
+    .container {
+      max-width: 450px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #eee;
+      border-radius: 8px;
+    }
+    h2 {
+      text-align: center;
+    }
+    label {
+      display: block; margin: 10px 0 5px; font-weight: bold;
+    }
+    select, input[type="number"], button {
+      width: 100%; padding: 8px; font-size: 1rem;
+      box-sizing: border-box; border-radius: 4px;
+      border: 1px solid #ccc; margin-bottom: 10px;
+    }
+    .info-block {
+      margin: 10px 0; padding: 8px; background: #fff;
+      border: 1px solid #ccc; border-radius: 4px;
+    }
+    .result {
+      margin-top: 15px; padding: 10px; background: #ddd;
+      text-align: center; border-radius: 4px;
+    }
+    .metal-breakdown {
+      text-align: left; margin: 0 auto; max-width: 300px;
+    }
+    .help-btn {
+      display: inline-block; width: 24px; height: 24px;
+      line-height: 24px; text-align: center;
+      border-radius: 5px; background-color: #007BFF;
+      color: #fff; font-weight: bold; cursor: pointer;
+      margin-left: 8px;
+    }
+    .help-btn:hover {
+      filter: brightness(110%);
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>Melting Calculator</h2>
+
+  <!-- 1) Select Metal -->
+  <label for="metalSelect">Select Metal:</label>
+  <select id="metalSelect">
+    <option value="gold" selected>Gold</option>
+    <option value="silver">Silver</option>
+    <option value="platinum">Platinum</option>
+  </select>
+
+  <!-- 2) Grade / Alloy -->
+  <label for="gradeSelect">Select Grade / Alloy:</label>
+  <select id="gradeSelect"></select>
+
+  <!-- 3) Color (or variant) -->
+  <label for="colorSelect" id="colorLabel">Color:</label>
+  <select id="colorSelect"></select>
+
+  <!-- 4) Correction (baseValue +0..+5) -->
+  <label for="corrSelect" id="corrLabel">
+    Correction of the base:
+    <span class="help-btn" onclick="showCorrHelp()">?</span>
+  </label>
+  <select id="corrSelect"></select>
+
+  <!-- 5) Mass -->
+  <label for="metalMass">Mass (g):</label>
+  <input type="number" id="metalMass" min="0" step="0.01" placeholder="Enter the mass" />
+
+  <!-- 6) Calculation Mode -->
+  <label for="massModeSelect">
+    Calculation Mode:
+    <span class="help-btn" onclick="showModeHelp()">?</span>
+  </label>
+  <select id="massModeSelect">
+    <option value="final-alloy" selected>Final Alloy Weight</option>
+    <option value="pure-metal">Pure Metal Weight</option>
+  </select>
+
+  <!-- Info about alloy -->
+  <div id="alloyInfo" class="info-block" style="display: none;">
+    <div><strong>Composition:</strong> <span id="compositionValue">—</span></div>
+    <div><strong>Density (g/cm³):</strong> <span id="densityValue">—</span></div>
+    <div><strong>Melting Point (°C):</strong> <span id="meltingValue">—</span></div>
+  </div>
+
+  <!-- Calculate button -->
+  <button id="calculateButton">Calculate</button>
+
+  <!-- Result -->
+  <div id="result" class="result" style="display: none;"></div>
+</div>
+
+<script>
+/*
+  ----------------------------------------------------------------------------
+   1) Data for Gold, Silver, Platinum
+   ----------------------------------------------------------------------------
+*/
+const goldAlloys = [
+  {
+    gradeLabel: "965/23K",
+    baseValue: 965,
+    variants: [
+      {
+        label: "reddish yellow 1",
+        composition: "Au 965, Ag 35, Cu 0",
+        parts: { au:965, ag:35, cu:0, others:[] },
+        density: 18.9,
+        melting: 1058
+      }
+    ]
+  },
+  {
+    gradeLabel: "750/18K",
+    baseValue: 750,
+    variants: [
+      {
+        label: "pale yellow green",
+        composition: "Au 750, Ag 250, Cu 0",
+        parts: { au:750, ag:250, cu:0, others:[] },
+        density: 15.9,
+        melting: 1038
+      },
+      {
+        label: "light yellow green",
+        composition: "Au 750, Ag 214, Cu 36",
+        parts: { au:750, ag:214, cu:36, others:[] },
+        density: 15.8,
+        melting: 1025
+      },
+      {
+        label: "greenish yellow",
+        composition: "Au 750, Ag 167, Cu 83",
+        parts: { au:750, ag:167, cu:83, others:[] },
+        density: 15.6,
+        melting: 968
+      },
+      {
+        label: "medium green",
+        composition: "Au 750, Ag 167, Cu 0, 83 Cd",
+        parts: {
+          au:750, ag:167, cu:0,
+          others:[{name:"Cd", fraction:83}]
+        },
+        density: 15.5,
+        melting: 1025
+      },
+      {
+        label: "light yellow",
+        composition: "Au 750, Ag 125, Cu 125",
+        parts: { au:750, ag:125, cu:125, others:[] },
+        density: 15.4,
+        melting: 905
+      },
+      {
+        label: "reddish yellow 1",
+        composition: "Au 750, Ag 83, Cu 167",
+        parts: { au:750, ag:83, cu:167, others:[] },
+        density: 15.2,
+        melting: 893
+      },
+      {
+        label: "orange yellow",
+        composition: "Au 750, Ag 36, Cu 214",
+        parts: { au:750, ag:36, cu:214, others:[] },
+        density: 15.0,
+        melting: 902
+      },
+      {
+        label: "intensive red",
+        composition: "Au 750, Ag 0, Cu 250",
+        parts: { au:750, ag:0, cu:250, others:[] },
+        density: 14.8,
+        melting: 898
+      },
+      {
+        label: "white gold PD",
+        composition: "Au 750, Ag 50, Pd 200",
+        parts: {
+          au:750, ag:50, cu:0,
+          others:[ {name:"Pd", fraction:200} ]
+        },
+        density: 16.6,
+        melting: 1280
+      },
+      {
+        label: "white gold Ni",
+        composition: "Au 750, Ni 135, Cu 85, Zn 30",
+        parts: {
+          au:750, ag:0, cu:85,
+          others:[ {name:"Ni", fraction:135}, {name:"Zn", fraction:30} ]
+        },
+        density: 14.7,
+        melting: 950
+      }
+    ]
+  },
+  {
+    gradeLabel: "585/14K",
+    baseValue: 585,
+    variants: [
+      {
+        label: "pale green",
+        composition: "Au 585, Ag 415, Cu 0",
+        parts: { au:585, ag:415, cu:0, others:[] },
+        density: 14.4,
+        melting: 1030
+      },
+      {
+        label: "light green 1",
+        composition: "Au 585, Ag 356, Cu 59",
+        parts: { au:585, ag:356, cu:59, others:[] },
+        density: 14.0,
+        melting: 980
+      },
+      {
+        label: "light green 2",
+        composition: "Au 585, Ag 310, Cu 105",
+        parts: { au:585, ag:310, cu:105, others:[] },
+        density: 13.8,
+        melting: 905
+      },
+      {
+        label: "green",
+        composition: "Au 585, Ag 310, Cu 35 + 70 Cd",
+        parts: {
+          au:585, ag:310, cu:35,
+          others:[{name:"Cd", fraction:70}]
+        },
+        density: 13.7,
+        melting: 810
+      },
+      {
+        label: "light yellow green",
+        composition: "Au 585, Ag 277, Cu 138",
+        parts: { au:585, ag:277, cu:138, others:[] },
+        density: 13.7,
+        melting: 874
+      },
+      {
+        label: "light yellow",
+        composition: "Au 585, Ag 249, Cu 166",
+        parts: { au:585, ag:249, cu:166, others:[] },
+        density: 13.7,
+        melting: 857
+      },
+      {
+        label: "yellow",
+        composition: "Au 585, Ag 208, Cu 207",
+        parts: { au:585, ag:208, cu:207, others:[] },
+        density: 13.6,
+        melting: 845
+      },
+      {
+        label: "dark yellow",
+        composition: "Au 585, Ag 166, Cu 249",
+        parts: { au:585, ag:166, cu:249, others:[] },
+        density: 13.4,
+        melting: 853
+      },
+      {
+        label: "orange yellow",
+        composition: "Au 585, Ag 138, Cu 277",
+        parts: { au:585, ag:138, cu:277, others:[] },
+        density: 13.3,
+        melting: 867
+      },
+      {
+        label: "reddish yellow 1",
+        composition: "Au 585, Ag 104, Cu 311",
+        parts: { au:585, ag:104, cu:311, others:[] },
+        density: 13.2,
+        melting: 885
+      },
+      {
+        label: "orange red",
+        composition: "Au 585, Ag 60, Cu 355",
+        parts: { au:585, ag:60, cu:355, others:[] },
+        density: 13.1,
+        melting: 907
+      },
+      {
+        label: "intensive red",
+        composition: "Au 585, Ag 0, Cu 415",
+        parts: { au:585, ag:0, cu:415, others:[] },
+        density: 13.0,
+        melting: 945
+      },
+      {
+        label: "white gold Ni",
+        composition: "Au 585, Ni 153, Cu 258, Zn 4",
+        parts: {
+          au:585, ag:0, cu:258,
+          others:[ {name:"Ni", fraction:153}, {name:"Zn", fraction:4} ]
+        },
+        density: 13.0,
+        melting: 1042
+      }
+    ]
+  },
+  {
+    gradeLabel: "500/12K",
+    baseValue: 500,
+    variants: [
+      {
+        label: "light yellow",
+        composition: "Au 500, Ag 333, Cu 167",
+        parts: { au:500, ag:333, cu:167, others:[] },
+        density: 13.1,
+        melting: 838
+      },
+      {
+        label: "dark yellow",
+        composition: "Au 500, Ag 167, Cu 333",
+        parts: { au:500, ag:167, cu:333, others:[] },
+        density: 12.6,
+        melting: 884
+      },
+      {
+        label: "orange red",
+        composition: "Au 500, Ag 71, Cu 429",
+        parts: { au:500, ag:71, cu:429, others:[] },
+        density: 12.3,
+        melting: 903
+      },
+      {
+        label: "white gold Ni",
+        composition: "Au 500, Ni 180, Cu 220, Zn 100",
+        parts: {
+          au:500, ag:0, cu:220,
+          others:[ {name:"Ni", fraction:180}, {name:"Zn", fraction:100} ]
+        },
+        density: 11.9,
+        melting: 907
+      }
+    ]
+  },
+  {
+    gradeLabel: "333/8K",
+    baseValue: 333,
+    variants: [
+      {
+        label: "pale green",
+        composition: "Au 333, Ag 533, Cu 134",
+        parts: { au:333, ag:533, cu:134, others:[] },
+        density: 12,
+        melting: 866
+      },
+      {
+        label: "light yellow 1",
+        composition: "Au 333, Ag 334, Cu 333",
+        parts: { au:333, ag:334, cu:333, others:[] },
+        density: 11.5,
+        melting: 823
+      },
+      {
+        label: "straw yellow",
+        composition: "Au 333, Ag 267, Cu 400",
+        parts: { au:333, ag:267, cu:400, others:[] },
+        density: 11.3,
+        melting: 856
+      },
+      {
+        label: "light yellow 2",
+        composition: "Au 333, Ag 255, Cu 350 + 47 Zn, 15 Sn",
+        parts: {
+          au:333, ag:255, cu:350,
+          others:[{name:"Zn", fraction:47}, {name:"Sn", fraction:15}]
+        },
+        density: 11.2,
+        melting: 838
+      },
+      {
+        label: "yellow",
+        composition: "Au 333, Ag 210, Cu 390 + 52 Zn, 15 Sn",
+        parts: {
+          au:333, ag:210, cu:390,
+          others:[{name:"Zn", fraction:52}, {name:"Sn", fraction:15}]
+        },
+        density: 11.1,
+        melting: 903
+      },
+      {
+        label: "reddish yellow 1",
+        composition: "Au 333, Ag 167, Cu 500",
+        parts: { au:333, ag:167, cu:500, others:[] },
+        density: 11.1,
+        melting: 904
+      },
+      {
+        label: "reddish yellow 2",
+        composition: "Au 333, Ag 165, Cu 430 + 57 Zn, 15 Sn",
+        parts: {
+          au:333, ag:165, cu:430,
+          others:[{name:"Zn", fraction:57}, {name:"Sn", fraction:15}]
+        },
+        density: 11,
+        melting: 903
+      },
+      {
+        label: "orange yellow",
+        composition: "Au 333, Ag 120, Cu 470 + 62 Zn, 15 Sn",
+        parts: {
+          au:333, ag:120, cu:470,
+          others:[{name:"Zn", fraction:62}, {name:"Sn", fraction:15}]
+        },
+        density: 10.9,
+        melting: 790
+      },
+      {
+        label: "white gold Ni",
+        composition: "Au 333, Ni 160, Cu 450, Zn 57",
+        parts: {
+          au:333, ag:0, cu:450,
+          others:[ {name:"Ni", fraction:160}, {name:"Zn", fraction:57} ]
+        },
+        density: 10.7,
+        melting: 1132
+      }
+    ]
+  }
+];
+
+const silverAlloys = [
+  {
+    gradeLabel: "Ag 960",
+    baseValue: 960,
+    variants: [
+      {
+        label: "960/40",
+        composition: "Ag 960, Cu 40",
+        parts: { au:0, ag:960, cu:40, others:[] },
+        density: 10.39,
+        melting: 940
+      }
+    ]
+  },
+  {
+    gradeLabel: "Ag 935",
+    baseValue: 935,
+    variants: [
+      {
+        label: "935/65",
+        composition: "Ag 935, Cu 65",
+        parts: { au:0, ag:935, cu:65, others:[] },
+        density: 10.32,
+        melting: 900
+      }
+    ]
+  },
+  {
+    gradeLabel: "Ag 925",
+    baseValue: 925,
+    variants: [
+      {
+        label: "925/75",
+        composition: "Ag 925, Cu 75",
+        parts: { au:0, ag:925, cu:75, others:[] },
+        density: 10.3,
+        melting: 896
+      }
+    ]
+  }
+];
+
+const platinumAlloys = [
+  {
+    gradeLabel: "Pt 950",
+    baseValue: 950,
+    variants: [
+      {
+        label: "950 Pt + 50 Au",
+        composition: "Pt 950, Au 50",
+        parts: {
+          au:50, ag:0, cu:0,
+          others:[ {name:"Pt", fraction:950} ]
+        },
+        density: 21,
+        melting: 1740
+      },
+      {
+        label: "950 Pt + 45Pd, 5Ir",
+        composition: "Pt 950, Pd 45, Ir 5",
+        parts: {
+          au:0, ag:0, cu:0,
+          others:[
+            {name:"Pt", fraction:950},
+            {name:"Pd", fraction:45},
+            {name:"Ir", fraction:5}
+          ]
+        },
+        density: 21,
+        melting: 1750
+      }
+    ]
+  },
+  {
+    gradeLabel: "Pt 900",
+    baseValue: 900,
+    variants: [
+      {
+        label: "900 Pt + 100 Ir",
+        composition: "Pt 900, Ir 100",
+        parts:{
+          au:0, ag:0, cu:0,
+          others:[
+            {name:"Pt", fraction:900}, {name:"Ir", fraction:100}
+          ]
+        },
+        density: 21.6,
+        melting: 1800
+      }
+    ]
+  }
+];
+
+const allMetals = [
+  { metalKey: "gold",     metalName: "Gold",     grades: goldAlloys },
+  { metalKey: "silver",   metalName: "Silver",   grades: silverAlloys },
+  { metalKey: "platinum", metalName: "Platinum", grades: platinumAlloys }
+];
+
+/*
+  ----------------------------------------------------------------------------
+   2) DOM references
+  ----------------------------------------------------------------------------
+*/
+const metalSelect   = document.getElementById("metalSelect");
+const gradeSelect   = document.getElementById("gradeSelect");
+const colorLabel    = document.getElementById("colorLabel");
+const colorSelect   = document.getElementById("colorSelect");
+const corrLabel     = document.getElementById("corrLabel");
+const corrSelect    = document.getElementById("corrSelect");
+
+const metalMassInput= document.getElementById("metalMass");
+const massModeSelect= document.getElementById("massModeSelect");
+
+const alloyInfo     = document.getElementById("alloyInfo");
+const compositionValue= document.getElementById("compositionValue");
+const densityValue  = document.getElementById("densityValue");
+const meltingValue  = document.getElementById("meltingValue");
+
+const calculateButton= document.getElementById("calculateButton");
+const resultDiv     = document.getElementById("result");
+
+/*
+  ----------------------------------------------------------------------------
+   3) fillGradeList() on metal change
+  ----------------------------------------------------------------------------
+*/
+function fillGradeList() {
+  gradeSelect.innerHTML = "";
+  colorSelect.innerHTML = "";
+  alloyInfo.style.display = "none";
+  resultDiv.style.display = "none";
+
+  const metalKey = metalSelect.value;
+  const metalObj = allMetals.find(m=>m.metalKey===metalKey);
+  if (!metalObj) {
+    gradeSelect.innerHTML="<option>No Data</option>";
+    hideColorAndCorr();
+    return;
+  }
+
+  metalObj.grades.forEach((g,idx)=>{
+    const opt = document.createElement("option");
+    opt.value= idx;
+    opt.textContent= g.gradeLabel;
+    gradeSelect.appendChild(opt);
+  });
+
+  updateVariants();
+}
+metalSelect.addEventListener("change", fillGradeList);
+
+/*
+  ----------------------------------------------------------------------------
+   4) updateVariants() on grade change
+  ----------------------------------------------------------------------------
+*/
+function updateVariants() {
+  colorSelect.innerHTML= "";
+  alloyInfo.style.display= "none";
+  resultDiv.style.display= "none";
+
+  const metalKey= metalSelect.value;
+  const metalObj= allMetals.find(m=>m.metalKey===metalKey);
+  if(!metalObj) { hideColorAndCorr(); return; }
+
+  const gIndex= parseInt(gradeSelect.value,10)||0;
+  const chosenGrade= metalObj.grades[gIndex];
+  if(!chosenGrade) { hideColorAndCorr(); return; }
+
+  const variants= chosenGrade.variants||[];
+  colorLabel.style.display="block";
+  colorSelect.style.display="block";
+
+  colorSelect.innerHTML="";
+  variants.forEach((v,idx)=>{
+    const opt= document.createElement("option");
+    opt.value= idx; opt.textContent= v.label;
+    colorSelect.appendChild(opt);
+  });
+  if(variants.length>0) showVariantInfo(variants[0]);
+
+  corrLabel.style.display="block";
+  corrSelect.style.display="block";
+  corrSelect.innerHTML="";
+  const baseVal= chosenGrade.baseValue||0;
+  const maxVal= Math.min(baseVal+5, 1000);
+  for(let val=baseVal; val<=maxVal; val++){
+    const opt= document.createElement("option");
+    opt.value= val.toString();
+    if(val===baseVal){
+      opt.textContent= `${val} (no correction)`;
+    } else {
+      opt.textContent= val.toString();
+    }
+    corrSelect.appendChild(opt);
+  }
+}
+gradeSelect.addEventListener("change", updateVariants);
+colorSelect.addEventListener("change", ()=>{
+  const metalKey= metalSelect.value;
+  const metalObj= allMetals.find(m=>m.metalKey===metalKey);
+  if(!metalObj)return;
+  const gIndex= parseInt(gradeSelect.value,10)||0;
+  const chosenGrade= metalObj.grades[gIndex];
+  if(!chosenGrade)return;
+  const cIndex= parseInt(colorSelect.value,10)||0;
+  const variant= chosenGrade.variants[cIndex];
+  if(variant) showVariantInfo(variant);
+});
+
+function showVariantInfo(variant){
+  alloyInfo.style.display="block";
+  compositionValue.textContent= variant.composition||"—";
+  densityValue.textContent= variant.density||"—";
+  meltingValue.textContent= variant.melting||"—";
+}
+
+function hideColorAndCorr(){
+  colorLabel.style.display="none";
+  colorSelect.style.display="none";
+  corrLabel.style.display="none";
+  corrSelect.style.display="none";
+}
+
+/*
+  ----------------------------------------------------------------------------
+   Initialization
+  ----------------------------------------------------------------------------
+*/
+fillGradeList();
+
+/*
+  ----------------------------------------------------------------------------
+   5) Calculate button
+  ----------------------------------------------------------------------------
+*/
+calculateButton.addEventListener("click", ()=>{
+  resultDiv.style.display="none";
+
+  const metalKey= metalSelect.value;
+  const metalObj= allMetals.find(m=>m.metalKey===metalKey);
+  if(!metalObj){ showResult("No data for this metal."); return; }
+
+  const gIndex= parseInt(gradeSelect.value,10)||0;
+  const chosenGrade= metalObj.grades[gIndex];
+  if(!chosenGrade){ showResult("No data for this grade."); return; }
+
+  const cIndex= parseInt(colorSelect.value,10)||0;
+  const variants= chosenGrade.variants||[];
+  if(variants.length===0){ showResult("No variants for this grade."); return; }
+  let chosenVariant=null;
+  if(variants.length===1) chosenVariant= variants[0];
+  else chosenVariant= variants[cIndex];
+  if(!chosenVariant){ showResult("No data for the selected color."); return; }
+
+  const inputMass= parseFloat(metalMassInput.value)||0;
+  if(inputMass<=0){ showResult("Please enter a mass > 0."); return; }
+
+  // Correction
+  const baseVal= chosenGrade.baseValue||0;
+  const newVal= parseInt(corrSelect.value,10)|| baseVal;
+  if(newVal>1000){ showResult("Correction goes beyond 1000."); return; }
+
+  // Original composition
+  let { au=0, ag=0, cu=0 }= chosenVariant.parts;
+  let others= (chosenVariant.parts.others||[]).map(o=>({...o}));
+
+  const sumAll= au+ ag+ cu+ others.reduce((acc,o)=>acc+o.fraction,0); // ~1000
+  // Find main field
+  let mainField= "";
+  if(au===baseVal) mainField="au";
+  else if(ag===baseVal) mainField="ag";
+  else if(cu===baseVal) mainField="cu";
+  else {
+    const idx= others.findIndex(o=> o.fraction===baseVal);
+    if(idx>=0) mainField= "others_"+idx;
+  }
+
+  const oldSumOthers= sumAll - baseVal;
+  const newSumOthers= 1000 - newVal;
+  if(newSumOthers<0){ showResult("newVal > 1000!"); return; }
+  let scale=1.0;
+  if(oldSumOthers>0) scale= newSumOthers/ oldSumOthers;
+
+  // Set main => newVal
+  if(mainField==="au") au=newVal;
+  else if(mainField==="ag") ag=newVal;
+  else if(mainField==="cu") cu=newVal;
+  else if(mainField.startsWith("others_")){
+    const i= parseInt(mainField.split("_")[1]);
+    others[i].fraction= newVal;
+  }
+
+  // Scale the rest
+  if(mainField!=="au") au*= scale;
+  if(mainField!=="ag") ag*= scale;
+  if(mainField!=="cu") cu*= scale;
+  if(mainField.startsWith("others_")){
+    const mainIdx= parseInt(mainField.split("_")[1]);
+    others.forEach((o,i)=>{
+      if(i!==mainIdx) o.fraction*= scale;
+    });
+  } else {
+    others.forEach(o=>{ o.fraction*= scale; });
+  }
+
+  // Mode
+  const mode= massModeSelect.value; // final-alloy / pure-metal
+  const pureFactor= 0.9999;
+  let T=0;
+  if(mode==="final-alloy"){
+    T= inputMass;
+  } else {
+    // pure-metal
+    if(newVal<=0){ showResult("newVal <= 0!"); return; }
+    const mainFrac= newVal/1000;
+    T= (inputMass* pureFactor)/ mainFrac;
+  }
+
+  const mAu= (au/1000)*T/pureFactor;
+  const mAg= (ag/1000)*T/pureFactor;
+  const mCu= (cu/1000)*T/pureFactor;
+  const finalOthers= others.map(o=>({
+    name:o.name,
+    mass:(o.fraction/1000)*T/pureFactor
+  }));
+
+  // Output
+  let out= `
+    <strong>Metal:</strong> ${metalKey}<br>
+    <strong>Grade:</strong> ${chosenGrade.gradeLabel}<br>
+    <strong>Color:</strong> ${chosenVariant.label}<br>
+    <strong>Input Mass:</strong> ${inputMass.toFixed(2)} g (${mode==="final-alloy"?"Final Alloy":"Pure Metal"})<br>
+  `;
+  out+= `<strong>Resulting Alloy Mass:</strong> ${T.toFixed(2)} g<br>`;
+  out+= `<strong>Correction:</strong> ${baseVal} → ${newVal} ( +${newVal-baseVal} )<br><br>`;
+  out+= `<strong>Required (99.99% purity):</strong><br>`;
+
+  if(mAu>0.0001) out+= `- Au: ${mAu.toFixed(3)} g<br>`;
+  if(mAg>0.0001) out+= `- Ag: ${mAg.toFixed(3)} g<br>`;
+  if(mCu>0.0001) out+= `- Cu: ${mCu.toFixed(3)} g<br>`;
+  finalOthers.forEach(o=>{
+    if(o.mass>0.0001){
+      out+= `- ${o.name}: ${o.mass.toFixed(3)} g<br>`;
+    }
+  });
+
+  showResult(out);
+});
+
+function showResult(html){
+  resultDiv.style.display="block";
+  resultDiv.innerHTML= html;
+}
+
+/*
+  ----------------------------------------------------------------------------
+   6) Dynamic help - change text depending on the metal
+  ----------------------------------------------------------------------------
+*/
+function showCorrHelp(){
+  const metalKey= metalSelect.value;
+  let msg= "";
+  if(metalKey==="gold"){
+    msg = "This correction allows you to slightly increase gold beyond its nominal.\n" +
+          "For example, if you prepare a 585 alloy but wish to have more gold content (587, 588, etc.),\n" +
+          "choose the desired value.";
+  } else if(metalKey==="silver"){
+    msg = "This correction allows you to slightly increase silver beyond its nominal.\n" +
+          "For example, if you prepare a 925 alloy but wish to have more silver content (927, 928, etc.),\n" +
+          "choose the desired value.";
+  } else {
+    // platinum
+    msg = "This correction allows you to slightly increase platinum beyond its nominal.\n" +
+          "For example, if you prepare a 950 alloy but wish to have more platinum content (953, 954, etc.),\n" +
+          "choose the desired value.";
+  }
+  alert(msg);
+}
+
+function showModeHelp(){
+  const metalKey= metalSelect.value;
+  let msg= "";
+  if(metalKey==="gold"){
+    msg = "Calculation mode defines how the program interprets the entered mass:\n\n" +
+          "• If you choose \"Final Alloy Weight,\" the entered number is the final alloy mass.\n" +
+          "• If you choose \"Pure Metal Weight,\" the entered number is the mass of the available gold (99.99%),\n" +
+          "from which you will get the resulting alloy.";
+  } else if(metalKey==="silver"){
+    msg = "Calculation mode defines how the program interprets the entered mass:\n\n" +
+          "• If you choose \"Final Alloy Weight,\" the entered number is the final alloy mass.\n" +
+          "• If you choose \"Pure Metal Weight,\" the entered number is the mass of the available silver (99.99%),\n" +
+          "from which you will get the resulting alloy.";
+  } else {
+    // platinum
+    msg = "Calculation mode defines how the program interprets the entered mass:\n\n" +
+          "• If you choose \"Final Alloy Weight,\" the entered number is the final alloy mass.\n" +
+          "• If you choose \"Pure Metal Weight,\" the entered number is the mass of the available platinum (99.99%),\n" +
+          "from which you will get the resulting alloy.";
+  }
+  alert(msg);
+}
+</script>
+</body>
+</html>
